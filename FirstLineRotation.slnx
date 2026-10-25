@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="FirstLineRotation.vcxproj" Id="a6370794-d313-4a15-bdc7-5c2770451703" />
+</Solution>
