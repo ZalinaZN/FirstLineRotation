@@ -3,7 +3,6 @@
 #include <cmath>            
 
 //  Типы данных для однородных координат и матричных преобразований
-// Вектор в однородных координатах: (x, y, w)
 struct Vector
 {
 	double x;   // координата X
@@ -22,8 +21,7 @@ Vector MultiplyVectorByMatrix(const Vector& vector, const Matrix& matrix)
 {
 	Vector result;
 
-	// Каждая компонента результата — сумма произведений элемента вектора
-	// на соответствующий столбец матрицы.
+	
 	result.x = vector.x * matrix.element[0][0]
 		+ vector.y * matrix.element[1][0]
 		+ vector.w * matrix.element[2][0];
@@ -67,54 +65,40 @@ Matrix CreateIdentityMatrix()
 //  (для вектор-строки смещение)
 Matrix CreateTranslationMatrix(double shiftX, double shiftY)
 {
-	Matrix result = CreateIdentityMatrix();
-	result.element[2][0] = shiftX;
-	result.element[2][1] = shiftY;
-	return result;
+	return { 1,0,0,0,1,0,shiftX,  shiftY ,1 };
 }
 
-//  Матрица поворота R(φ), φ в радианах
-//  (для вектор-строки: x' = x·cosφ − y·sinφ,  y' = x·sinφ + y·cosφ)
-Matrix CreateRotationMatrix(double angleRadians)
-{
-	Matrix result = CreateIdentityMatrix();
-
-	const double cos = std::cos(angleRadians);
-	const double sin = std::sin(angleRadians);
-
-	result.element[0][0] = cos;
-	result.element[0][1] = -sin;
-	result.element[1][0] = sin;
-	result.element[1][1] = cos;
-
-	return result;
-}
 //  Параметры вращения
-const UINT   ROTATION_TIMER_INTERVAL_MS = 23;      // ~40 кадров/с
-const double ROTATION_ANGLE_DEGREES = 1.0;     // шаг поворота Δφ
+const UINT   TIMER_INTERVAL_MS = 23;      // ~40 кадров/с
+const double ROTATION_STEP_DEGREES = 1.0;     // шаг поворота Δφ
 const double PI_VALUE = 3.14159265358979323846;
-
-//  Цвета
+const double INITIAL_P1_X = 250, INITIAL_P1_Y = 250;
+const double INITIAL_P2_X = 450, INITIAL_P2_Y = 250;
 const COLORREF LINE_COLOR = RGB(0, 0, 200);   // цвет отрезка
-const COLORREF CENTER_MARKER_COLOR = RGB(0, 0, 200);   // цвет метки P1
 
 //  Глобальные переменные
 HINSTANCE hInst;                     // текущий экземпляр приложения
 WCHAR szTitle[MAX_LOADSTRING];       // строка заголовка окна
 WCHAR szWindowClass[MAX_LOADSTRING]; // имя класса окна
+Matrix rotationTransform = { 1,0,0, 0,1,0, 0,0,1 };
 
 // Состояние отрезка 
-Vector rotationCenterP1;   // неподвижная точка P1 (центр вращения)
-Vector movingPointP2;      // текущее положение точки P2
+Vector rotationCenterP1 = { INITIAL_P1_X, INITIAL_P1_Y, 1.0 };   //  точка P1 (центр вращения)
+Vector movingPointP2 = { INITIAL_P2_X, INITIAL_P2_Y, 1.0 };      // текущее положение точки P2
 
 // Матрица поворота, собранная один раз при нажатии "Rotation" 
-Matrix rotationTransform;
+Matrix CreateRotationMatrix(double angleRadians)
+{
+	double cos = std::cos(angleRadians);
+	double sin = std::sin(angleRadians);
+	return { cos,-sin,0, sin,cos,0, 0,0,1 };
+}
 
 //  Состояние таймера 
 bool isRotationRunning = false;
 
 //  Объявления функций
-ATOM                MyRegisterClass(HINSTANCE hInstance);
+ATOM                MyRegisterClass(HINSTANCE);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
@@ -127,42 +111,21 @@ void DrawCenterMarker(HDC hdc, const Vector& center);
 void DrawSegment(HDC hdc, const Vector& p1, const Vector& p2, COLORREF color)
 {
 	HPEN pen = CreatePen(PS_SOLID, 3, color);
-	HPEN oldPen = static_cast<HPEN>(SelectObject(hdc, pen));
-
-	MoveToEx(hdc, static_cast<int>(p1.x), static_cast<int>(p1.y), nullptr);
-	LineTo(hdc, static_cast<int>(p2.x), static_cast<int>(p2.y));
-
+	HPEN oldPen = (HPEN)SelectObject(hdc, pen);
+	MoveToEx(hdc, (int)p1.x, (int)p1.y, nullptr);
+	LineTo(hdc, (int)p2.x, (int)p2.y);
 	SelectObject(hdc, oldPen);
 	DeleteObject(pen);
 }
 
-//  Рисование метки центра вращения 
-void DrawCenterMarker(HDC hdc, const Vector& center)
-{
-	const int radius = 3;
-
-	HBRUSH brush = CreateSolidBrush(CENTER_MARKER_COLOR);
-	HBRUSH oldBrush = static_cast<HBRUSH>(SelectObject(hdc, brush));
-
-	Ellipse(hdc,
-		static_cast<int>(center.x) - radius,
-		static_cast<int>(center.y) - radius,
-		static_cast<int>(center.x) + radius,
-		static_cast<int>(center.y) + radius);
-
-	SelectObject(hdc, oldBrush);
-	DeleteObject(brush);
-}
-
 //  Точка входа
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
+int WINAPI wWinMain(
+	_In_ HINSTANCE hInstance,
 	_In_opt_ HINSTANCE hPrevInstance,
-	_In_ LPWSTR    lpCmdLine,
-	_In_ int       nCmdShow)
+	_In_ PWSTR pCmdLine,
+	_In_ int nCmdShow
+)
 {
-	UNREFERENCED_PARAMETER(hPrevInstance);
-	UNREFERENCED_PARAMETER(lpCmdLine);
-
 	// Загрузка строковых ресурсов
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	LoadStringW(hInstance, IDC_FIRSTLINEROTATION, szWindowClass, MAX_LOADSTRING);
@@ -175,29 +138,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_FIRSTLINEROTATION));
 
-	MSG msg;
-	while (GetMessage(&msg, nullptr, 0, 0))
+	MSG windowMessage;
+	while (GetMessage(&windowMessage, nullptr, 0, 0))
 	{
-		if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
+		if (!TranslateAccelerator(windowMessage.hwnd, hAccelTable, &windowMessage))
 		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
+			TranslateMessage(&windowMessage);
+			DispatchMessage(&windowMessage);
 		}
 	}
 
-	return (int)msg.wParam;
+	return (int)windowMessage.wParam;
 }
 
 //  Регистрация класса окна
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
-	WNDCLASSEXW wcex;
-
-	wcex.cbSize = sizeof(WNDCLASSEX);
+	WNDCLASSEXW wcex = { sizeof(wcex) };
 	wcex.style = CS_HREDRAW | CS_VREDRAW;
 	wcex.lpfnWndProc = WndProc;
-	wcex.cbClsExtra = 0;
-	wcex.cbWndExtra = 0;
 	wcex.hInstance = hInstance;
 	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_FIRSTLINEROTATION));
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
@@ -213,21 +172,15 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance;
-
 	// WS_CLIPCHILDREN — чтобы рисование линии не накладывалось на кнопки
 	HWND hWnd = CreateWindowW(szWindowClass, szTitle,
-		WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+		WS_OVERLAPPED | WS_CLIPCHILDREN,
 		CW_USEDEFAULT, 0, 500, 600,
 		nullptr, nullptr, hInstance, nullptr);
 
-	if (!hWnd)
-	{
-		return FALSE;
-	}
-
+	if (!hWnd) return FALSE;
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
-
 	return TRUE;
 }
 
@@ -236,91 +189,46 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
-		//  WM_CREATE: инициализация отрезка и создание кнопок
 	case WM_CREATE:
-	{
-		// Начальное положение отрезкаP1 = (250,250), P2 = (400,350)
-		rotationCenterP1.x = 250.0;
-		rotationCenterP1.y = 250.0;
-		rotationCenterP1.w = 1.0;
-
-		movingPointP2.x = 400.0;
-		movingPointP2.y = 350.0;
-		movingPointP2.w = 1.0;
-
-		// Пока матрица — единичная (композиция будет собрана при нажатии "Rotation")
-		rotationTransform = CreateIdentityMatrix();
-
-		// Кнопка "Rotation"
 		CreateWindowW(L"BUTTON", L"Rotation",
 			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
 			10, 10, 120, 30,
 			hWnd, (HMENU)IDC_BUTTON_ROTATION, hInst, nullptr);
 
-		// Кнопка "Cancel"
 		CreateWindowW(L"BUTTON", L"Cancel",
 			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
 			140, 10, 120, 30,
 			hWnd, (HMENU)IDC_BUTTON_CANCEL, hInst, nullptr);
-
 		return 0;
-	}
 
-	//  WM_COMMAND: обработка меню и кнопок
 	case WM_COMMAND:
-	{
-		int controlId = LOWORD(wParam);
-		switch (controlId)
+		switch (LOWORD(wParam))          
 		{
 		case IDM_ABOUT:
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
 			return 0;
 
 		case IDM_EXIT:
+		case IDC_BUTTON_CANCEL:          
 			DestroyWindow(hWnd);
 			return 0;
 
-			//  Кнопка "Rotation" — собрать композицию матриц и стартовать таймер
 		case IDC_BUTTON_ROTATION:
 		{
-			// Δφ в радианах
-			// Δφ переводим в радианы, т.к. cos/sin работают с радианами.
-			const double angleRadians = ROTATION_ANGLE_DEGREES * PI_VALUE / 180.0;
-
-			// Отдельные матрицы композиции поворота вокруг P1:
-
-			//   T(-x1, -y1) — перенос P1 в начало координат
-			//   R(Δφ)       — поворот на малый угол
-			//   T( x1,  y1) — возврат начала координат в P1
-			Matrix translateToOrigin = CreateTranslationMatrix(-rotationCenterP1.x, -rotationCenterP1.y);
-			Matrix rotateByDeltaPhi = CreateRotationMatrix(angleRadians);
-			Matrix translateBackToCenter = CreateTranslationMatrix(rotationCenterP1.x, rotationCenterP1.y);
-
-			// Композиция: M = T(-x1,-y1) · R(Δφ) · T(x1,y1)
-			Matrix temp = MultiplyMatrixByMatrix(translateToOrigin, rotateByDeltaPhi);
-			rotationTransform = MultiplyMatrixByMatrix(temp, translateBackToCenter);
-
-			// Запуск таймера только при первом нажатии
-			if (!isRotationRunning)
-			{
-				isRotationRunning = true;
-				SetTimer(hWnd, ROTATION_TIMER_ID, ROTATION_TIMER_INTERVAL_MS, nullptr);
-			}
+			double angleRadians = ROTATION_STEP_DEGREES * PI_VALUE / 180.0;
+			rotationTransform = MultiplyMatrixByMatrix(
+				MultiplyMatrixByMatrix(
+					CreateTranslationMatrix(-rotationCenterP1.x, -rotationCenterP1.y),
+					CreateRotationMatrix(angleRadians)),
+				CreateTranslationMatrix(rotationCenterP1.x, rotationCenterP1.y));
+			SetTimer(hWnd, TIMER_ID, TIMER_INTERVAL_MS, nullptr);
 			return 0;
 		}
-
-		//  Кнопка "Cancel" — завершение программы
-		case IDC_BUTTON_CANCEL:
-			DestroyWindow(hWnd);
-			return 0;
 		}
-	}
-	break;
+		break;
 
-	//  WM_TIMER: шаг анимации
 	case WM_TIMER:
-	{
-		if (wParam == ROTATION_TIMER_ID && isRotationRunning)
+		if (wParam == TIMER_ID)
 		{
 			HDC hdc = GetDC(hWnd);
 
@@ -328,46 +236,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DrawSegment(hdc, rotationCenterP1, movingPointP2,
 				GetSysColor(COLOR_WINDOW));
 
-			// 2. Повернуть точку P2 на малый угол:
-			//    P2'' = P2' · T(-x1,-y1) · R(Δφ) · T(x1,y1)
+			// 2. Повернуть P2 на Δφ:  P2'' = P2' · T(-x1,-y1) · R(Δφ) · T(x1,y1)
 			movingPointP2 = MultiplyVectorByMatrix(movingPointP2, rotationTransform);
 
-			// 3. Нарисовать отрезок в новом положении + обновить метку P1
+			// 3. Нарисовать в новом положении
 			DrawSegment(hdc, rotationCenterP1, movingPointP2, LINE_COLOR);
-			DrawCenterMarker(hdc, rotationCenterP1);
-
 			ReleaseDC(hWnd, hdc);
 		}
 		return 0;
-	}
 
-	//  WM_PAINT: перерисовать текущее состояние отрезка
 	case WM_PAINT:
 	{
 		PAINTSTRUCT paintStruct;
 		HDC hdc = BeginPaint(hWnd, &paintStruct);
-
 		DrawSegment(hdc, rotationCenterP1, movingPointP2, LINE_COLOR);
-		DrawCenterMarker(hdc, rotationCenterP1);
-
 		EndPaint(hWnd, &paintStruct);
 		return 0;
 	}
 
-	//  WM_DESTROY: остановить таймер и выйти
 	case WM_DESTROY:
-		if (isRotationRunning)
-		{
-			KillTimer(hWnd, ROTATION_TIMER_ID);
-			isRotationRunning = false;
-		}
+		KillTimer(hWnd, TIMER_ID);       
 		PostQuitMessage(0);
 		return 0;
 	}
 
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
-
 //  Диалог "О программе" 
 INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {

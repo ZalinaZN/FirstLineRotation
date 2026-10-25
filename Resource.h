@@ -2,9 +2,9 @@
 // Включаемый файл, созданный в Microsoft Visual C++.
 // Используется FirstLineRotation.rc
 #define MAX_LOADSTRING 100
-#define IDC_BUTTON_ROTATION         3001   // кнопка "Rotation"
-#define IDC_BUTTON_CANCEL           3002   // кнопка "Cancel"
-#define ROTATION_TIMER_ID           1      // идентификатор таймера анимации
+#define IDC_BUTTON_ROTATION         3001   
+#define IDC_BUTTON_CANCEL           3002   
+#define TIMER_ID				       1      
 
 #define IDS_APP_TITLE			103
 #define IDR_MAINFRAME			128
@@ -19,8 +19,7 @@
 #ifndef IDC_STATIC
 #define IDC_STATIC				-1
 #endif
-// Следующие стандартные значения для новых объектов
-//
+
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 
